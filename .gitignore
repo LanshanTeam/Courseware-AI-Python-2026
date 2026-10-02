@@ -1,0 +1,8 @@
+# Obsidian 个人工作区配置（窗口布局、最近打开文件等），每次开关都会变，不进版本库
+.obsidian/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
