@@ -391,7 +391,7 @@ student-manager/
 
 
 
-`.gitignore` 至少写这几行：
+`../.gitignore` 至少写这几行：
 
 
 
@@ -1576,3 +1576,8 @@ logging.basicConfig(
 
 - 没有写 `except: pass` 这种把错误吞掉的地方。
 
+# 提交
+
+邮箱:**zoldrut@outlook.com**,附上名字+学号
+
+截至时间:下次上课之前
