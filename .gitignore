@@ -6,3 +6,12 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+
+# IDE
+.idea/
+
+# Lesson 配图生成脚本与运行产物（本地保留，不入库；配图资产在 lesson01/assets/）
+lesson01/scripts/
+lesson01/.ipynb_checkpoints/
+lesson01/students.json
+lesson01/students.txt
