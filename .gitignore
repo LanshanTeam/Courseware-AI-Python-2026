@@ -19,3 +19,7 @@ lesson02/scripts/
 lesson02/.ipynb_checkpoints/
 lesson02/data/
 lesson02/bad.json
+
+# 配图中间产物：脚本每次跑都会重生成 SVG 矢量稿，入库只留笔记本引用的 PNG/GIF
+lesson01/assets/*.svg
+lesson02/assets/*.svg
