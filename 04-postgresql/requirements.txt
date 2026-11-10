@@ -1,0 +1,7 @@
+# 用 [binary] 会一并装上预编译的 libpq，免去本地编译依赖
+psycopg[binary,pool]>=3.2
+
+SQLAlchemy>=2.0
+
+# 可选：把连接串放进 .env 文件而不是环境变量
+python-dotenv>=1.0
