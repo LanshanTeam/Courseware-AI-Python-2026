@@ -3,13 +3,13 @@
 ## 目录
 
 - [为什么后端离不开数据库](#为什么后端离不开数据库)
-- [关系模型速览](#关系模型速览)
+- [关系模型速览](#关系模型)
 - [安装 PostgreSQL 并连接](#安装-postgresql-并连接)
 - [建库与建表](#建库与建表)
 - [增删改查（CRUD）](#增删改查crud)
 - [条件查询](#条件查询)
-- [聚合与分组](#聚合与分组)
 - [多表连接](#多表连接)
+- [聚合与分组](#聚合与分组)
 - [事务与并发](#事务与并发)
 - [用 Python 连接 PostgreSQL](#用-python-连接-postgresql)
 - [SQLAlchemy 入门](#sqlalchemy-入门)
@@ -48,7 +48,23 @@ cur.execute("SELECT name FROM students WHERE score > 90")
 
 ---
 
-## 安装 PostgreSQL 并连接
+## 关系型与非关系型数据库
+
+### 关系型数据库（RDBMS）
+
+基于**关系模型**（二维表：行 + 列）组织数据，数据都存放在一张张表中，表之间可以通过键来建立关联；遵循**ACID**事务特性，使用 SQL 作为标准查询语言
+这节课我们介绍的PostgreSQL便是关系型数据库，常见的关系型数据库还有：MySQL、Oracle、SQL Server、SQLite等等
+
+### 非关系型数据库（NoSQL）
+不采用传统二维关系表模型，是一类数据库的统称，为高并发、海量数据、灵活数据结构场景设计；**不强制支持ACID**，大多优先保证 BASE（基本可用、柔性状态、最终一致性），没有统一查询语言。
+其按存储模型又可以以下分为四类：
+- KV 型：Redis
+- 文档型：MongoDB
+- 列存储：HBase、Cassandra
+- 图数据库：Neo4j
+
+--- 
+## 安装PostgreSQL并连接
 
 两种安装方式，自选一种就行
 
@@ -93,8 +109,8 @@ docker compose down             # 停止（数据保留在 pgdata 卷里）
 #### 方式二：官方安装包
 
 - **Windows**：下载 EDB 安装包（[https://www.postgresql.org/download/windows/](https://www.postgresql.org/download/windows/)），一路下一步，**记住安装时设置的 `postgres` 超级用户密码**，安装时会自带 pgAdmin 和 `psql`。
-  安装完若在终端敲 `psql` 提示找不到命令，把 `C:\Program Files\PostgreSQL\18\bin` 加进系统 `PATH`。
-- **macOS**：`brew install postgresql@18 && brew services start postgresql@18`。
+  安装完若在终端敲 `psql` 提示找不到命令，把 `C:\Program Files\PostgreSQL\18\bin` 加进系统 `PATH`
+- **macOS**：用`brew install postgresql@18 && brew services start postgresql@18`安装。
 - **Linux**
 
 ```bash
@@ -104,7 +120,7 @@ sudo apt update && sudo apt install -y postgresql-18
 sudo systemctl enable --now postgresql
 ```
 
-> 注：直接用发行版自带的 `apt install postgresql` 通常装到的是该发行版冻结的旧主版本，不会有新特性。
+> 注：直接用发行版自带的 `apt install postgresql` 通常装到的是该发行版冻结的旧主版本，不会有新特性
 
 ### psql 架构
 
@@ -148,7 +164,7 @@ WHERE id = 5;
 course=# \conninfo        -- 元命令：查看当前连接信息
 ```
 
-常用元命令见[附录 A](#附录-a-psql-元命令速查)。图形客户端推荐 **DBeaver**（免费、跨平台）或 **pgAdmin**（官方的）；VS Code 也可装 SQLTools / Database Client 插件。
+常用元命令见[附录 A](#附录-a-psql-元命令速查)。图形客户端推荐 **DBeaver**（免费、跨平台）或 **pgAdmin**（官方的）；VS Code 也可装 SQLTools / Database Client 插件
 
 ---
 
@@ -156,21 +172,21 @@ course=# \conninfo        -- 元命令：查看当前连接信息
 
 ### 四个基本概念
 
-**表（Table）** 是一类实体的集合，有固定的列定义。直接想成 Excel 里的一个 sheet：`students` 就是学生表。
+**表（Table）** 是一类实体的集合，有固定的列定义。直接想成 Excel 里的一个 sheet：`students` 就是学生表
 
-**行 / 记录（Row / Record）** 是表里的一条记录，代表一个具体实体。比如`(1, '2024001', '张三', ...)` 这一行，就是指张三这个人。
+**行 / 记录（Row / Record）** 是表里的一条记录，代表一个具体实体。比如`(1, '2024001', '张三', ...)` 这一行，就是指张三这个人
 
-**列 / 字段（Column / Field）** 是实体的一个属性，有确定的类型。如`name VARCHAR(50)` 说的是"姓名，最多 50 个字符"。
+**列 / 字段（Column / Field）** 是实体的一个属性，有确定的类型。如`name VARCHAR(50)` 说的是"姓名，最多 50 个字符"
 
-**域（Domain）** 是这一列允许取值的范围。`score` 只能是 0~100——它比类型更严：`INTEGER` 允许 -5，域不允许。
+**域（Domain）** 是这一列允许取值的范围。`score` 只能是 0~100——它比类型更严：`INTEGER` 允许 -5，域不允许
 
 顺带说一下你们看文档时可能会经常遇到的两个词：**元组**和**属性**，元组就对应的是行，而属性就是列
 
 ### 键：把表和表连起来
 
-- **主键（Primary Key, PK）**：唯一标识一行，不允许 NULL、不允许重复。通常用自增整数 `SERIAL`，也可以用业务编号或 `UUID`。
-- **外键（Foreign Key, FK）**：本表的一列指向另一张表的主键，用来表达"这两行有关系"。
-- **候选键 / 唯一键（Unique Key）**：业务上应当唯一的列，比如学号、邮箱。
+- **主键（Primary Key, PK）**：唯一标识一行，不允许 NULL、不允许重复。通常用自增整数 `SERIAL`，也可以用业务编号或 `UUID`
+- **外键（Foreign Key, FK）**：本表的一列指向另一张表的主键，用来表达"这两行有关系"
+- **候选键 / 唯一键（Unique Key）**：业务上应当唯一的列，比如学号、邮箱
 
 ### 三种关系怎么落成表
 
@@ -189,12 +205,11 @@ course=# \conninfo        -- 元命令：查看当前连接信息
 
 ## 建库与建表
 
-建表属于是**一次做对、后面省事**的操作。表结构设计得不好，后面每一条查询都在替它还债；反过来，类型选对、约束加上，很多业务bug 数据库直接就帮你挡掉了
+建表属于是**一次做对、后面省事**的操作。表结构设计得不好，后面每一条查询都在替它还债；反过来，类型选对、约束加上，很多业务bug, 数据库直接就帮你挡掉了
 
 ### 数据类型
 
-PostgreSQL 的类型非常多，入门阶段掌握下面这些就够覆盖 90% 场景。挑类型的顺序是：**先想清楚这列要存什么语义，再决定用哪个类型**。
-
+PostgreSQL 的类型非常多，入门阶段掌握下面这些就够覆盖 90% 场景。挑类型的顺序是：**先想清楚这列要存什么语义，再决定用哪个类型**
 
 | 类别     | 类型                                                     | 说明                  | 使用建议                              |
 | -------- | -------------------------------------------------------- | --------------------- | ------------------------------------- |
@@ -210,21 +225,21 @@ PostgreSQL 的类型非常多，入门阶段掌握下面这些就够覆盖 90% �
 | 数组     | `INTEGER[]` / `TEXT[]`                                   | 原生数组              | 简单标签可用，复杂关联仍建议拆表      |
 
 > **Q：为什么金额和分数不能用 `DOUBLE PRECISION`？**
-> A：浮点是二进制近似。比如`SELECT 0.1::float8 + 0.2::float8 = 0.3;`的结果是 `false`。`NUMERIC` 是十进制定点数，`0.1 + 0.2 = 0.3` 严格成立。
+> A：浮点是二进制近似。比如`SELECT 0.1::float8 + 0.2::float8 = 0.3;`的结果是 `false`。`NUMERIC` 是十进制定点数，`0.1 + 0.2 = 0.3` 严格成立
 
 > **Q：`TIMESTAMP` 还是 `TIMESTAMPTZ`？**
-> A：`TIMESTAMP` 不带时区，存进去什么就是什么；`TIMESTAMPTZ` 存的是**绝对时刻**（内部按 UTC 存，按会话时区显示）。跨时区、跨服务器几乎总是该用 `TIMESTAMPTZ`。
+> A：`TIMESTAMP` 不带时区，存进去什么就是什么；`TIMESTAMPTZ` 存的是**绝对时刻**（内部按 UTC 存，按会话时区显示）。跨时区、跨服务器几乎总是该用 `TIMESTAMPTZ`
 
 ### 约束：把业务规则交给数据库
 
 六种常见约束分别管这些事：
 
-- `PRIMARY KEY`（主键）：唯一 + 非空，一张表只能有一个。
-- `NOT NULL`：该列不允许为空。
-- `UNIQUE`：该列（或列组合）的值唯一，但**可以有多行 NULL**——NULL 之间不算"重复"。
-- `CHECK`：表达式必须为真，比如 `score BETWEEN 0 AND 100`。
-- `DEFAULT`：不写该列时自动填的值，比如 `now()`。
-- `FOREIGN KEY`：引用另一张表的主键，还能配 `ON DELETE` / `ON UPDATE` 行为。
+- `PRIMARY KEY`（主键）：唯一 + 非空，一张表只能有一个
+- `NOT NULL`：该列不允许为空
+- `UNIQUE`：该列（或列组合）的值唯一，但**可以有多行 NULL**——NULL 之间不算"重复"
+- `CHECK`：表达式必须为真，比如 `score BETWEEN 0 AND 100`
+- `DEFAULT`：不写该列时自动填的值，比如 `now()`
+- `FOREIGN KEY`：引用另一张表的主键，还能配 `ON DELETE` / `ON UPDATE` 行为
 
 把它们写在一起长这样：
 
@@ -249,34 +264,32 @@ class_id INTEGER REFERENCES classes (id) ON DELETE RESTRICT
 ```
 
 pgsql默认行为是 NO ACTION，和 RESTRICT 一样，子表还有数据引用父表就无法删除，
-他们差别在于检查时机的不同：RESTRICT 立刻报错，而NO ACTION 允许把检查推迟到语句末尾（只在使用可延迟约束 DEFERRABLE INITIALLY DEFERRED 时才体现出来）。
+他们差别在于检查时机的不同：RESTRICT 立刻报错，而NO ACTION 允许把检查推迟到语句末尾（只在使用可延迟约束`DEFERRABLE INITIALLY DEFERRED`时才体现出来）。
 
 ```sql
 -- CASCADE：删父行时连带删掉子行
 student_id INTEGER REFERENCES students (id) ON DELETE CASCADE
--- ‘成绩’对‘学生’：学生没了，他的成绩留着也没人认领，一起删掉才干净。
+-- ‘成绩’对‘学生’：学生没了，他的成绩留着也没人认领，一起删掉才干净
 
 -- SET NULL：把子行的外键置为 NULL（前提：该列允许 NULL）
 class_id INTEGER REFERENCES classes (id) ON DELETE SET NULL
--- ‘学生’对‘班级’：班级撤销了，学生还在，只是暂时"没班"。
+-- ‘学生’对‘班级’：班级撤销了，学生还在，只是暂时"没班"
 ```
 
-还有一种比较少见的做法是设为默认值，典型用法是存在一条"未知班级"的哨兵行，把孤儿数据都挂到它下面。
+还有一种比较少见的做法是设为默认值，典型用法是存在一条"未知班级"的哨兵行，把孤儿数据都挂到它下面
 
 ```sql
 -- SET DEFAULT：设为默认值（前提：该列有 DEFAULT）
 class_id INTEGER REFERENCES classes (id) ON DELETE SET DEFAULT
 ```
 
-综上：如果子表有单独存在的价值，就用 `SET NULL`（或者干脆用 `RESTRICT` 拦住，逼人先处理）；没有，就用 `CASCADE`。拿不准时就用默认的 `RESTRICT`——它防护性最强，最坏的结果是"删不掉"，而不是"悄悄删多了"。
+综上：如果子表有单独存在的价值，就用 `SET NULL`（或者干脆用 `RESTRICT` 拦住，逼人先处理）；没有，就用 `CASCADE`。拿不准时就用默认的 `RESTRICT`——它防护性最强，最坏的结果是"删不掉"，而不是"悄悄删多了"
 
 > `CASCADE` 是双刃剑：一次 `DELETE` 可能连锁删掉几十万行，而且它**会沿着外键一层层往下传**，删到第三层你都没意识到。生产环境删数据前，先用 `SELECT COUNT(*)` 数一下会被连带删掉多少行。
 
 ### 建表
 
 完整脚本见 `sql/schema.sql`，核心片段：
-
-（现在看不懂没关系，知道干什么就行，后面会依次讲到）
 
 ```sql
 -- 班级
@@ -318,6 +331,7 @@ CREATE TABLE scores (
 );
 
 -- 索引：外键列上的 JOIN 会频繁用到
+-- (现在看不懂没关系，知道干什么就行，后面会讲到)
 CREATE INDEX idx_scores_student ON scores (student_id);
 CREATE INDEX idx_scores_course  ON scores (course_id);
 CREATE INDEX idx_students_class ON students (class_id);
@@ -334,7 +348,7 @@ ALTER TABLE students RENAME COLUMN email TO email_addr;               -- 改列�
 ALTER TABLE students RENAME TO student;                               -- 改表名
 ```
 
-> 生产环境改大表结构（加列带默认值、改类型）可能长时间锁表，需要评估影响窗口；跨环境的结构变更应当交给迁移工具（Alembic / Flyway），**不要靠人肉执行 SQL**。
+> 生产环境改大表结构（加列带默认值、改类型）可能长时间锁表，需要评估影响窗口；跨环境的结构变更应当交给迁移工具（Alembic / Flyway），**不要靠人肉执行 SQL**
 
 ### 索引入门
 
@@ -351,7 +365,7 @@ DROP INDEX idx_students_name;                               -- 删除索引
 
 注：
 
-- **主键和 `UNIQUE` 约束会自动创建索引**，不用重复建。
+- **主键和 `UNIQUE` 约束会自动创建索引**，不用重复建
 - **索引不是越多越好**：每个索引都会让 `INSERT/UPDATE/DELETE` 变慢，并占用磁盘。
 - **在索引列上做函数运算会让索引失效**：
 
@@ -366,13 +380,13 @@ DROP INDEX idx_students_name;                               -- 删除索引
 EXPLAIN ANALYZE SELECT * FROM scores WHERE student_id = 1;
 ```
 
-看到 `Seq Scan` 说明走了全表扫描，看到 `Index Scan` 说明命中了索引。
+看到 `Seq Scan` 说明走了全表扫描，看到 `Index Scan` 说明命中了索引
 
 ---
 
 ## 增删改查（CRUD）
 
-CRUD 是 SQL 的日常：Create、Read、Update、Delete。其中读操作尤其重要——查得好不好，决定了你的数据库能不能撑住。所以这一节的篇幅，大半给了 `SELECT`
+CRUD 是 SQL 的日常：Create、Read、Update、Delete。其中读操作尤其重要——查得好不好，决定了你的数据库能不能撑住。所以这一节我们的重点在`SELECT`的相关语句上
 
 ### INSERT INTO - 插入
 
@@ -392,7 +406,7 @@ VALUES ('2024001', '张三', 'M', 1)
 RETURNING id, student_no, name, created_at;
 ```
 
-`RETURNING` 免去了"插完再查一次主键"的往返，也很适合配合 `id = currval()` 之类的老写法——现在直接用 `RETURNING` 就够了。
+`RETURNING` 免去了"插完再查一次主键"的往返，也很适合配合 `id = currval()` 之类的老写法——现在直接用 `RETURNING` 就够了
 
 **冲突处理：`ON CONFLICT`（UPSERT）**
 
@@ -432,7 +446,7 @@ WHERE  course_id = 2 AND score < 60
 RETURNING id, score;
 ```
 
-> **一旦忘记写 `WHERE`，就是全表更新。** 所以习惯上先用 `SELECT` 加同样的 `WHERE` 看命中几行，确认无误再把 `SELECT` 改成 `UPDATE`。也可以在事务里操作，确认后再 `COMMIT`。
+> **忘记写 `WHERE`就是全表更新。** 所以习惯上先用 `SELECT` 加同样的 `WHERE` 看命中几行，确认无误再把 `SELECT` 改成 `UPDATE`（也可以在事务里操作，确认后再 `COMMIT`）
 
 ### DELETE / TRUNCATE - 删除
 
@@ -448,17 +462,17 @@ TRUNCATE TABLE scores RESTART IDENTITY CASCADE;      -- 清空整表，速度极
 
 两者的差别不止在删除的快慢上：
 
-**粒度**：`DELETE` 可以带 `WHERE` 删一部分行；`TRUNCATE` 只能整表清空，不接受条件。
+**粒度**：`DELETE` 可以带 `WHERE` 删一部分行；`TRUNCATE` 只能整表清空，不接受条件
 
-**速度**：`DELETE` 逐行删除、逐行写日志，大表能删到你怀疑人生；`TRUNCATE` 直接丢掉整块数据、重建一个空表，极快。
+**速度**：`DELETE` 逐行删除、逐行写日志，大表能删到你怀疑人生；`TRUNCATE` 直接丢掉整块数据、重建一个空表，极快
 
-**日志与回滚**：`DELETE` 记录每一行，所以能精确回滚到中途；`TRUNCATE` 只记一条"这张表被清空了"，回滚粒度是整个表。
+**日志与回滚**：`DELETE` 记录每一行，所以能精确回滚到中途；`TRUNCATE` 只记一条"这张表被清空了"，回滚粒度是整个表
 
-**级联**：`DELETE` 会自动触发子表上的 `ON DELETE` 级联；`TRUNCATE` 不会自动级联，必须显式写 `CASCADE`，否则一有别的表引用它就直接报错。
+**级联**：`DELETE` 会自动触发子表上的 `ON DELETE` 级联；`TRUNCATE` 不会自动级联，必须显式写 `CASCADE`，否则一有别的表引用它就直接报错
 
-**自增序列**：`DELETE` 不动序列，删完再插还是接着往下编号；`TRUNCATE` 默认也不动，想重置要写 `RESTART IDENTITY`。
+**自增序列**：`DELETE` 不动序列，删完再插还是接着往下编号；`TRUNCATE` 默认也不动，想重置要写 `RESTART IDENTITY`
 
-> **软删除** 是生产中的常见做法：加一列 `deleted_at TIMESTAMPTZ`，删除时只写时间戳，查询时统一加 `WHERE deleted_at IS NULL`。好处是数据可追溯、可恢复，代价是每条查询都得记得加条件。
+> **软删除** 是生产中的常见做法：加一列 `deleted_at TIMESTAMPTZ`，删除时只写时间戳，查询时统一加 `WHERE deleted_at IS NULL`。好处是数据可追溯、可恢复，代价是每条查询都得记得加条件
 
 ---
 
@@ -507,9 +521,7 @@ LIMIT 10 OFFSET 0;          -- 第 1 页
 
 ## 条件查询
 
-由于实际项目里，`SELECT *` 几乎从不出现在代码中——真实的查询永远带着条件。这一节讲的都是 `WHERE` 和它周边的工具：运算符、范围、模糊匹配、NULL，以及把结果排好序、分好页。
-
-其中关于NULL的介绍认真，它是 SQL 里最容易写错、最难查出来的一类 bug。
+由于实际项目里，`SELECT *` 几乎从不出现在代码中——真实的查询永远带着条件。这一节讲的都是 `WHERE` 和它周边的工具：运算符、范围、模糊匹配、NULL，以及把结果排好序、分好页
 
 ### 运算符
 
@@ -554,9 +566,9 @@ SELECT * FROM students WHERE email IS NOT NULL;
 （2）`NULLIF`如果前一个参数等于后一个参数，则返回NULL，否则返回前一个参数
 
 ```sql
--- 
-SELECT name, COALESCE(email, '未填写') AS email FROM students;   -- email为空则取替代值
-SELECT NULLIF(score, 0) FROM scores;                              -- 等于0则变为NULL
+-- email为空则取替代值
+SELECT name, COALESCE(email, '未填写') AS email FROM students;  
+SELECT NULLIF(score, 0) FROM scores;                            -- 等于0则变为NULL
 SELECT AVG(COALESCE(score, 0)) FROM scores;                     -- 把缺考当0分算
 ```
 
@@ -564,7 +576,7 @@ SELECT AVG(COALESCE(score, 0)) FROM scores;                     -- 把缺考当0
 
 ```sql
 -- score 中有 1 行 NULL，共 10 行
-SELECT COUNT(*)          FROM scores;   -- 10   统计行数，包含 NULL 行
+SELECT COUNT(*)          FROM scores;   -- 10   统计行数，包含NULL行
 SELECT COUNT(score)      FROM scores;   -- 9    只统计非 NULL
 SELECT COUNT(DISTINCT score) FROM scores;-- 9    去重后再统计
 SELECT AVG(score)        FROM scores;   -- 分母是 9，不是 10
@@ -580,9 +592,9 @@ SELECT * FROM students ORDER BY class_id ASC NULLS LAST, name DESC;
 SELECT * FROM students ORDER BY id LIMIT 10 OFFSET 20;
 ```
 
-> **分页的一个隐藏坑**：`ORDER BY` 里如果有重复值，不同页可能出现同一行（或漏行），因为排序不稳定。稳妥做法是在 `ORDER BY` 末尾补一个唯一列：`ORDER BY score DESC, id ASC`。
+> **分页的一个隐藏坑**：`ORDER BY` 里如果有重复值，不同页可能出现同一行（或漏行），因为排序不稳定。稳妥做法是在 `ORDER BY` 末尾补一个唯一列：`ORDER BY score DESC, id ASC`
 >
-> 深分页（`OFFSET` 很大）性能很差，因为它要先把前面所有行读出来扔掉。大表分页应当改用**游标分页（keyset pagination）**：`WHERE (score, id) < (上次的 score, 上次的 id) ORDER BY score DESC, id DESC LIMIT 20`。
+> 深分页（`OFFSET` 很大）性能很差，因为它要先把前面所有行读出来扔掉。大表分页应当改用**游标分页（keyset pagination）**：`WHERE (score, id) < (上次的 score, 上次的 id) ORDER BY score DESC, id DESC LIMIT 20`
 
 ### 常用函数与 CASE条件判断
 
@@ -776,7 +788,7 @@ WHERE 平均分 > 80;
 
 前面讲完怎么查找行，那如果要找到有多少学生有成绩以及每个班学生的平均成绩应该怎么做呢，这就是接下来要讲的聚会与分组。这也是 SQL 真正发挥价值的地方：几百万行数据，通过`GROUP BY` 就能给你一张报表。
 
-### 五个聚合函数
+### 聚合函数
 
 ```sql
 SELECT
@@ -913,13 +925,13 @@ ORDER BY c.name, 排名;
 
 几个经常使用的窗口函数：
 
-- `ROW_NUMBER()`：组内连续编号 `1,2,3,4`，永远不重复，也不管并列。
-- `RANK()`：并列后**跳号**，如`1,2,2,4`——两个第 2 名，下一个直接是第 4。
-- `DENSE_RANK()`：并列后**不跳号**，如`1,2,2,3`。
-- `LAG(col)` / `LEAD(col)`：取组内上一行 / 下一行的值，做同比环比、算相邻差值全靠它。
-- `SUM(col) OVER (...)`：累计求和，比如按日期累加销售额。
+- `ROW_NUMBER()`：组内连续编号 `1,2,3,4`，永远不重复，也不管并列
+- `RANK()`：并列后**跳号**，如`1,2,2,4`——两个第 2 名，下一个直接是第 4
+- `DENSE_RANK()`：并列后**不跳号**，如`1,2,2,3`
+- `LAG(col)` / `LEAD(col)`：取组内上一行 / 下一行的值，做同比环比、算相邻差值
+- `SUM(col) OVER (...)`：累计求和，比如按日期累加销售额
 
-一句话记差别：`RANK` 会空号，`DENSE_RANK` 不会空号，`ROW_NUMBER` 根本不管并列。
+一句话记差别：`RANK` 会空号，`DENSE_RANK` 不会空号，`ROW_NUMBER` 根本不管并列
 
 通过窗口函数能写出非常干净的统计报表，可以多敲几遍
 
@@ -961,7 +973,7 @@ SELECT * FROM v_student_report WHERE 平均分 > 80 ORDER BY 平均分 DESC;
 DROP VIEW v_student_report;
 ```
 
-视图本身不存数据，只是保存了查询定义；它很适合给上层应用或报表工具暴露一个稳定的结构。
+视图本身不存数据，只是保存了查询定义；它很适合给上层应用或报表工具暴露一个稳定的结构
 
 扩展：
 你可能在练习sql过程中会看到这样的语句
@@ -1007,7 +1019,7 @@ WITH后面也可以一次性定义多个CTE，用`，`分隔开
 
 ### 为什么需要事务
 
-假设一个场景：从 A 扣 100、给 B 加 100，这两步要么都发送，要么都不发生。一旦中间过程中发生错误就会凭空少 100 块。
+假设一个场景：从 A 扣 100、给 B 加 100，这两步要么都发送，要么都不发生。一旦中间过程中发生错误就会凭空少 100 块
 
 ```sql
 BEGIN;
@@ -1023,37 +1035,37 @@ COMMIT;     -- 提交
 
 把转账这个故事套进去，下面数据库的四个特性就能懂了：
 
-**原子性（Atomicity）**：事务内的操作要么全做，要么全不做。扣款和入账是一个整体，中间断电，谁的钱都不动——不会出现"A 少了 100，B 没收到"的半成品。
+**原子性（Atomicity）**：事务内的操作要么全做，要么全不做。扣款和入账是一个整体，中间断电，谁的钱都不动——不会出现"A 少了 100，B 没收到"的半成品
 
-**一致性（Consistency）**：事务前后数据库都满足所有约束。钱的总数不变、余额不能为负，这些是业务规则，由数据库在提交时守住。
+**一致性（Consistency）**：事务前后数据库都满足所有约束。钱的总数不变、余额不能为负，这些是业务规则，由数据库在提交时守住
 
-**隔离性（Isolation）**：并发事务之间互不干扰。别人看不到你还没提交的中间状态，就像你们各自在副本上操作，提交那一刻才合并。
+**隔离性（Isolation）**：并发事务之间互不干扰。别人看不到你还没提交的中间状态，就像你们各自在副本上操作，提交那一刻才合并
 
-**持久性（Durability）**：提交后的数据即使立刻断电也不丢，靠 WAL（预写日志）先落盘再返回。
+**持久性（Durability）**：提交后的数据即使立刻断电也不丢，靠 WAL（预写日志）先落盘再返回
 
-虽然是四大特性，但另外三个最终都是为了**一致性**服务的：原子性保证"不出半成品"，隔离性保证"并发不互相污染"，持久性保证"承诺过的不会反悔"。
+虽然是四大特性，但另外三个最终都是为了**一致性**服务的：原子性保证"不出半成品"，隔离性保证"并发不互相污染"，持久性保证"承诺过的不会反悔"
 
 ### 隔离级别
 
 并发事务若不加控制，会撞出三种"读异常"。它们名字很像，但盯的是不同的东西：
 
-**脏读（Dirty Read）**：读到了别的事务**尚未提交**的修改。对方后来回滚了，你手里这份数据就是从来没存在过的。
+**脏读（Dirty Read）**：读到了别的事务**尚未提交**的修改。对方后来回滚了，你手里这份数据就是从来没存在过的
 
-**不可重复读（Non-repeatable Read）**：同一个事务里两次读同一行，结果不一样——因为中间别的事务改了它并提交了。它针对的是**某一行的内容**。
+**不可重复读（Non-repeatable Read）**：同一个事务里两次读同一行，结果不一样——因为中间别的事务改了它并提交了。它针对的是**某一行的内容**
 
-**幻读（Phantom Read）**：同一个事务里两次做同样的范围查询，**行数变了**——别的事务往这个范围里插了新行，像幻觉一样多出来一条。它针对的是**结果集的行数**，不是某一行的值。
+**幻读（Phantom Read）**：同一个事务里两次做同样的范围查询，**行数变了**——别的事务往这个范围里插了新行，像幻觉一样多出来一条。它针对的是**结果集的行数**，不是某一行的值
 
 PostgreSQL 支持四个标准隔离级别（默认 **READ COMMITTED**）。逐级往上，限制越来越严、并发度越来越低：
 
-1.**READ UNCOMMITTED-读未提交**：标准里最松的一级，会产生脏读的问题，但 由于 PostgreSQL **直接把它当作 READ COMMITTED 处理**——MVCC 的实现方式天然不会产生脏读。所以你写这一级，实际拿到的还是 READ COMMITTED 的保证。
+1.**READ UNCOMMITTED-读未提交**：标准里最松的一级，会产生脏读的问题，但 由于 PostgreSQL **直接把它当作 READ COMMITTED 处理**——MVCC 的实现方式天然不会产生脏读。所以你写这一级，实际拿到的还是 READ COMMITTED 的保证
 
-2.**READ COMMITTED-读已提交（默认）**：不会脏读，但**不可重复读和幻读都可能发生**。每条语句看到的是"这条语句开始那一刻已提交"的快照，所以同一事务里的两条语句，完全可能看到不同版本的数据。
+2.**READ COMMITTED-读已提交（默认）**：不会脏读，但**不可重复读和幻读都可能发生**。每条语句看到的是"这条语句开始那一刻已提交"的快照，所以同一事务里的两条语句，完全可能看到不同版本的数据
 
-3.**REPEATABLE READ-可重复读**：整个事务共用一个快照，不会脏读、不会不可重复读。PostgreSQL 的实现比 SQL 标准更强——**幻读基本也能避免**（标准只要求它"可能避免"）。代价是并发更新同一行时会报 `could not serialize access due to concurrent update`，需要在应用层写重试。
+3.**REPEATABLE READ-可重复读**：整个事务共用一个快照，不会脏读、不会不可重复读。PostgreSQL 的实现比 SQL 标准更强——**幻读基本也能避免**（标准只要求它"可能避免"）。代价是并发更新同一行时会报 `could not serialize access due to concurrent update`，需要在应用层写重试
 
-4.**SERIALIZABLE-串行化**：最强的一级，效果等价于"事务一个接一个串行执行"。脏读、不可重复读、幻读全都没有，但冲突时失败率最高，同样需要重试逻辑。
+4.**SERIALIZABLE-串行化**：最强的一级，效果等价于"事务一个接一个串行执行"。脏读、不可重复读、幻读全都没有，但冲突时失败率最高，同样需要重试逻辑
 
-> **整合起来看**：`RU`（PostgreSQL 等同 RC）→ `RC` 只挡脏读 → `RR` 连不可重复读也挡，幻读基本避免 → `SERIALIZABLE` 4 全挡。越往右越安全，也越容易因为冲突失败而需要重试。
+> **整合起来看**：`RU`（PostgreSQL 等同 RC）→ `RC` 只挡脏读 → `RR` 连不可重复读也挡，幻读基本避免 → `SERIALIZABLE` 4 全挡。越往右越安全，也越容易因为冲突失败而需要重试
 
 ```sql
 BEGIN ISOLATION LEVEL REPEATABLE READ;
@@ -1067,7 +1079,7 @@ COMMIT;
 
 对此，PostgreSQL 后台有一个专门的进程，会定期扫描所有正在等待锁的事务，一旦检测到死锁后**主动中止其中一个**事务（通常是代价较小、或者执行时间较短的那个事务），然后抛出 `deadlock detected`。
 
-预防死锁的方法：**所有事务按相同的顺序访问表/行**。
+我们可以通过将**所有事务按相同的顺序访问表/行**来预防死锁
 
 ### 用事务做危险操作的"安全网"
 
@@ -1078,15 +1090,15 @@ SELECT COUNT(*) FROM students;             -- 确认影响行数对不对
 ROLLBACK;                                  -- 不对就撤销；确认对了改成 COMMIT
 ```
 
-这是每个数据库使用者都应养成的习惯，比任何备份都来得快。
+这是每个数据库使用者都应养成的习惯，比任何备份都来得快
 
 ---
 
 ## 用 Python 连接 PostgreSQL
 
-到这儿为止，我们都在 `psql` 里手敲 SQL。但真实的后端服务不会那样工作：它得由程序去连库、发 SQL、拿结果，还要处理事务、参数和连接复用。
+（这一小节相关代码不做强求，理解便可）到这儿为止，我们都在 `psql` 里手敲 SQL。但真实的后端服务不会那样工作：它得由程序去连库、发 SQL、拿结果，还要处理事务、参数和连接复用
 
-这一节就从最底层的驱动开始，一步一步往上搭：**驱动 → 连接 → 执行 → 防注入 → 事务 → 连接池 → 封装工具**。下一节的 SQLAlchemy 站在这一层之上。
+这一节就从最底层的驱动开始，一步一步往上搭：**驱动 → 连接 → 执行 → 防注入 → 事务 → 连接池 → 封装工具**。而下一节的 SQLAlchemy 则站在这一层之上
 
 ### 安装驱动
 
@@ -1113,7 +1125,7 @@ conn = psycopg.connect(
 )
 ```
 
-> 注：**千万别把密码硬编码进代码。** 通过配置环境变量：`os.environ["DATABASE_URL"]`，配合 `.env` 文件（记得把 `.env` 写进 `.gitignore`）来进行储存。
+> 注：**千万别把密码硬编码进代码。** 通过配置环境变量：`os.environ["DATABASE_URL"]`，配合 `.env` 文件（记得把 `.env` 写进 `.gitignore`）来进行储存
 
 ### 基本用法
 
@@ -1157,9 +1169,9 @@ with psycopg.connect(DSN, row_factory=dict_row) as conn:
         )
 ```
 
-### 安全第一：参数化查询
+### 数据安全：参数化查询
 
-**SQL注入**：当用户输入SQL语句时如果直接拼进正常SQL则会产生数据泄露等安全问题
+如果我们对输入不做处理的话很可能会导致**SQL注入**：即当用户输入SQL语句时如果直接拼进正常SQL则会产生数据泄露等安全问题
 
 ```python
 name = "'; DROP TABLE students; --"
@@ -1179,7 +1191,7 @@ cur.execute("SELECT * FROM students WHERE name = %s", (name,))
 
 这是因为参数化查询通过把"SQL 结构"和"数据值"分两趟发给服务器，数据永远被当作值处理，不可能改变语句结构
 
-> 顺带一提：`%s` 是 psycopg 的占位符风格（遵循 DB-API）。它和 Python 的 `%` 格式化**没有关系**，别弄混了。所有值——包括数字和字符串——统一用 `%s`，psycopg 会按 Python 类型自动适配。想传列表用 `%s` 配合 `WHERE id = ANY(%s)`。
+> 顺带一提：`%s` 是 psycopg 的占位符风格（遵循 DB-API）。它和 Python 的 `%` 格式化**没有关系**，别弄混了。所有值——包括数字和字符串——统一用 `%s`，psycopg 会按 Python 类型自动适配。想传列表用 `%s` 配合 `WHERE id = ANY(%s)`
 
 ### 事务控制
 
@@ -1206,11 +1218,11 @@ finally:
     conn.close()
 ```
 
-> **一个常见困惑**：`psycopg3` 默认 `autocommit=False`，但 `with connect(...)` 会在退出时提交。所以「只读查询后自动提交」是没问题的，而「批量写操作想在中间失败就整体回滚」也正是 `with` 块给的行为。
+> **一个常见困惑**：`psycopg3` 默认 `autocommit=False`，但 `with connect(...)` 会在退出时提交。所以「只读查询后自动提交」是没问题的，而「批量写操作想在中间失败就整体回滚」也正是 `with` 块给的行为
 
 ### 连接池
 
-Web 服务里**每个请求都新建连接**是不可接受的——建立 TCP + 认证开销很大，还会打满 `max_connections`。
+Web 服务里**每个请求都新建连接**是不可接受的——建立 TCP + 认证开销很大，还会打满 `max_connections`
 
 ```python
 from psycopg_pool import ConnectionPool
@@ -1232,9 +1244,9 @@ with pool.connection() as conn:          # 借一个连接
 pool.close()
 ```
 
-其中，`min_size` 是常驻连接数，池子建好就先开这么多条，低峰期也有热连接可用，第一个请求不用等握手。
+其中，`min_size` 是常驻连接数，池子建好就先开这么多条，低峰期也有热连接可用，第一个请求不用等握手
 
-而`max_size` 是上限，借出的连接到这个数之后，后来的请求就在池里排队（等够 `timeout` 还拿不到就抛异常）。这个值要跟数据库的 `max_connections` 一起算，别让池子把库打满。
+而`max_size` 是上限，借出的连接到这个数之后，后来的请求就在池里排队（等够 `timeout` 还拿不到就抛异常）。这个值要跟数据库的 `max_connections` 一起算，别让池子把库打满
 
 **泄漏**算是最常见的问题：借了连接忘了还，池子被慢慢耗干，最后整个服务卡在取连接上。所以用 `with pool.connection()` 而不是手动 `getconn()` / `putconn()`——`with` 保证异常时也会归还。
 
@@ -1400,7 +1412,7 @@ Base.metadata.drop_all(engine)
 
 ### Session
 
-`Session` 相当于"内存里的一块缓存 + 一个待执行队列"。你对对象的修改先记在 Session 里，`commit()` 时才翻译成 SQL 发出去。
+`Session` 相当于"内存里的一块缓存 + 一个待执行队列"。你对对象的修改先记在 Session 里，`commit()` 时才翻译成 SQL 发出去
 
 ```python
 from sqlalchemy.orm import Session

@@ -26,3 +26,5 @@ lesson02/assets/*.svg
 
 # AI 助手本地工作目录（记忆/会话数据，不入库）
 .workbuddy-ai/
+
+.vscode

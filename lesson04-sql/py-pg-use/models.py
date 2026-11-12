@@ -1,6 +1,5 @@
 """
 models.py —— SQLAlchemy ORM 模型
-
 """
 
 from datetime import date, datetime
@@ -19,10 +18,10 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
-    """所有 ORM 模型的基类。"""
+    """所有 ORM 模型的基类"""
 
 
-# ---------------------------------------------------------------- 班级
+# -------------------------------------------------- 班级
 class Class(Base):
     __tablename__ = "classes"
 
@@ -40,7 +39,7 @@ class Class(Base):
         return f"<Class id={self.id} name={self.name!r} grade={self.grade}>"
 
 
-# ---------------------------------------------------------------- 学生
+# --------------------------------------------------- 学生
 class Student(Base):
     __tablename__ = "students"
 
@@ -70,7 +69,7 @@ class Student(Base):
         return f"<Student id={self.id} no={self.student_no!r} name={self.name!r}>"
 
 
-# ---------------------------------------------------------------- 课程
+# -------------------------------------------- 课程
 class Course(Base):
     __tablename__ = "courses"
 
@@ -85,9 +84,9 @@ class Course(Base):
         return f"<Course id={self.id} code={self.code!r} name={self.name!r}>"
 
 
-# ---------------------------------------------------------------- 成绩
+# --------------------------------------------- 成绩
 class Score(Base):
-    """学生与课程之间的多对多中间表，自身携带「分数」「考试日期」两个属性。"""
+    """学生与课程之间的多对多中间表"""
 
     __tablename__ = "scores"
 
